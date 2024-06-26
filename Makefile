@@ -9,63 +9,82 @@ CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 &
 ASFLAGS = -m32 -gdwarf-2 -Wa,-divide
 LDFLAGS += -m $(shell $(LD) -V | grep elf_i386 2>/dev/null | head -n 1)
 
+
+## xv6.img
+BOOTBLOCK_DIR = bootloader/
+MODULES_DIR = kernel_modules/
+CORE_DIR = kernel_core/
+
+## fs.img
+ULIB_DIR = ulib/
+UPROG_DIR = uprog/
+
+## header files
+INCLUDE_DIR = include/
+
+## build
+BUILD_DIR = build/
+
+
 #### xv6.img ####################################
-bootblock: bootasm.S bootmain.c
-	$(CC) $(CFLAGS) -fno-pic -O -nostdinc -I. -c bootmain.c
-	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c bootasm.S
+bootblock: $(BOOTBLOCK_DIR)bootasm.S $(BOOTBLOCK_DIR)bootmain.c
+	$(CC) $(CFLAGS) -fno-pic -O -nostdinc -I. -c $(BOOTBLOCK_DIR)bootmain.c
+	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c $(BOOTBLOCK_DIR)bootasm.S
 	$(LD) $(LDFLAGS) -N -e start -Ttext 0x7C00 -o bootblock.o bootasm.o bootmain.o
 	$(OBJDUMP) -S bootblock.o > bootblock.asm
 	$(OBJCOPY) -S -O binary -j .text bootblock.o bootblock
-	./sign.pl bootblock
+	./$(BOOTBLOCK_DIR)sign.pl bootblock
 
-vectors.S: vectors.pl
-	./vectors.pl > vectors.S
+$(MODULES_DIR)vectors.S: $(MODULES_DIR)vectors.pl
+	./$(MODULES_DIR)vectors.pl > $(MODULES_DIR)vectors.S
+
 
 OBJS = \
-	bio.o\
-	console.o\
-	exec.o\
-	file.o\
-	fs.o\
-	ide.o\
-	ioapic.o\
-	kalloc.o\
-	kbd.o\
-	lapic.o\
-	log.o\
-	main.o\
-	mp.o\
-	picirq.o\
-	pipe.o\
-	proc.o\
-	sleeplock.o\
-	spinlock.o\
-	string.o\
-	swtch.o\
-	syscall.o\
-	sysfile.o\
-	sysproc.o\
-	trapasm.o\
-	trap.o\
-	uart.o\
-	vectors.o\
-	vm.o\
-	
-entryother: entryother.S
-	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c entryother.S
+	$(MODULES_DIR)bio.o\
+	$(MODULES_DIR)console.o\
+	$(MODULES_DIR)exec.o\
+	$(MODULES_DIR)file.o\
+	$(MODULES_DIR)fs.o\
+	$(MODULES_DIR)ide.o\
+	$(MODULES_DIR)ioapic.o\
+	$(MODULES_DIR)kalloc.o\
+	$(MODULES_DIR)kbd.o\
+	$(MODULES_DIR)lapic.o\
+	$(MODULES_DIR)log.o\
+	$(MODULES_DIR)main.o\
+	$(MODULES_DIR)mp.o\
+	$(MODULES_DIR)picirq.o\
+	$(MODULES_DIR)pipe.o\
+	$(MODULES_DIR)proc.o\
+	$(MODULES_DIR)sleeplock.o\
+	$(MODULES_DIR)spinlock.o\
+	$(MODULES_DIR)string.o\
+	$(MODULES_DIR)swtch.o\
+	$(MODULES_DIR)syscall.o\
+	$(MODULES_DIR)sysfile.o\
+	$(MODULES_DIR)sysproc.o\
+	$(MODULES_DIR)trapasm.o\
+	$(MODULES_DIR)trap.o\
+	$(MODULES_DIR)uart.o\
+	$(MODULES_DIR)vectors.o\
+	$(MODULES_DIR)vm.o\
+
+
+entryother: $(CORE_DIR)entryother.S
+	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c $(CORE_DIR)entryother.S
 	$(LD) $(LDFLAGS) -N -e start -Ttext 0x7000 -o bootblockother.o entryother.o
 	$(OBJCOPY) -S -O binary -j .text bootblockother.o entryother
 	$(OBJDUMP) -S bootblockother.o > entryother.asm
 
-initcode: initcode.S
-	$(CC) $(CFLAGS) -nostdinc -I. -c initcode.S
+initcode: $(CORE_DIR)initcode.S
+	$(CC) $(CFLAGS) -nostdinc -I. -c $(CORE_DIR)initcode.S
 	$(LD) $(LDFLAGS) -N -e start -Ttext 0 -o initcode.out initcode.o
 	$(OBJCOPY) -S -O binary initcode.out initcode
 	$(OBJDUMP) -S initcode.o > initcode.asm
 
-kernel: $(OBJS) entry.o entryother initcode kernel.ld
-	$(LD) $(LDFLAGS) -T kernel.ld -o kernel entry.o $(OBJS) -b binary initcode entryother
-	$(OBJDUMP) -S kernel > kernel.asm
+kernel: $(OBJS) $(MODULES_DIR)entry.o entryother initcode $(CORE_DIR)kernel.ld
+	$(LD) $(LDFLAGS) -T $(CORE_DIR)kernel.ld -o kernel $(MODULES_DIR)entry.o $(OBJS) -b binary initcode entryother
+	$(OBJDUMP) -S kernel > $(CORE_DIR)kernel.asm
 	$(OBJDUMP) -t kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > kernel.sym
 
 xv6.img: bootblock kernel
@@ -77,12 +96,12 @@ xv6.img: bootblock kernel
 
 
 #### fs.img ####################################
-mkfs: mkfs.c fs.h
+mkfs: mkfs.c $(INCLUDE_DIR)fs.h
 	gcc -Werror -Wall -o mkfs mkfs.c
 	
-ULIB = ulib.o usys.o printf.o umalloc.o
+ULIB = $(ULIB_DIR)ulib.o $(ULIB_DIR)usys.o $(ULIB_DIR)printf.o $(ULIB_DIR)umalloc.o
 
-_%: %.o $(ULIB)
+_%: $(UPROG_DIR)%.o $(ULIB)
 	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o $@ $^
 	$(OBJDUMP) -S $@ > $*.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $*.sym
@@ -107,8 +126,9 @@ qemu-nox: fs.img xv6.img
 	$(QEMU) -nographic -drive file=fs.img,index=1,media=disk,format=raw -drive file=xv6.img,index=0,media=disk,format=raw -smp 2 -m 512
 
 clean: 
-	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
-	*.o *.d *.asm *.sym vectors.S bootblock entryother \
-	initcode initcode.out kernel xv6.img fs.img kernelmemfs \
-	xv6memfs.img mkfs .gdbinit \
-	$(UPROGS)
+	find ./ -name "*.o" -exec rm -f {} +
+	find ./ -name "*.d" -exec rm -f {} +
+	find ./ -name "*.asm" -exec rm -f {} +
+	find ./ -name "*.sym" -exec rm -f {} +
+	find ./ -name "_*" -exec rm -f {} +
+	rm -f vectors.S bootblock entryother initcode initcode.out kernel xv6.img fs.img mkfs
