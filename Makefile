@@ -24,68 +24,83 @@ INCLUDE_DIR = include/
 
 ## build
 BUILD_DIR = build/
-
+$(shell mkdir -p $(BUILD_DIR))
 
 #### xv6.img ####################################
 bootblock: $(BOOTBLOCK_DIR)bootasm.S $(BOOTBLOCK_DIR)bootmain.c
-	$(CC) $(CFLAGS) -fno-pic -O -nostdinc -I. -c $(BOOTBLOCK_DIR)bootmain.c
-	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c $(BOOTBLOCK_DIR)bootasm.S
-	$(LD) $(LDFLAGS) -N -e start -Ttext 0x7C00 -o bootblock.o bootasm.o bootmain.o
-	$(OBJDUMP) -S bootblock.o > bootblock.asm
-	$(OBJCOPY) -S -O binary -j .text bootblock.o bootblock
-	./$(BOOTBLOCK_DIR)sign.pl bootblock
+	$(CC) $(CFLAGS) -fno-pic -O -nostdinc -I. -c -o $(BUILD_DIR)bootmain.o $(BOOTBLOCK_DIR)bootmain.c
+	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c -o $(BUILD_DIR)bootasm.o $(BOOTBLOCK_DIR)bootasm.S
+	$(LD) $(LDFLAGS) -N -e start -Ttext 0x7C00 -o $(BUILD_DIR)bootblock.o $(BUILD_DIR)bootasm.o $(BUILD_DIR)bootmain.o
+	$(OBJDUMP) -S $(BUILD_DIR)bootblock.o > $(BUILD_DIR)bootblock.asm
+	$(OBJCOPY) -S -O binary -j .text $(BUILD_DIR)bootblock.o $(BUILD_DIR)bootblock
+	./$(BOOTBLOCK_DIR)sign.pl $(BUILD_DIR)bootblock
 
-$(MODULES_DIR)vectors.S: $(MODULES_DIR)vectors.pl
-	./$(MODULES_DIR)vectors.pl > $(MODULES_DIR)vectors.S
+$(BUILD_DIR)vectors.S: $(MODULES_DIR)vectors.pl
+	mkdir -p $(BUILD_DIR)
+	./$(MODULES_DIR)vectors.pl > $(BUILD_DIR)vectors.S
 
+$(BUILD_DIR)%.o: $(MODULES_DIR)%.c
+	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c -o $@ $<
+
+$(BUILD_DIR)%.o: $(MODULES_DIR)%.S
+	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c -o $(BUILD_DIR)$@ $<
+
+$(BUILD_DIR)%.o: $(BUILD_DIR)vectors.S
+	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c -o $(BUILD_DIR)$@ $<
 
 OBJS = \
-	$(MODULES_DIR)bio.o\
-	$(MODULES_DIR)console.o\
-	$(MODULES_DIR)exec.o\
-	$(MODULES_DIR)file.o\
-	$(MODULES_DIR)fs.o\
-	$(MODULES_DIR)ide.o\
-	$(MODULES_DIR)ioapic.o\
-	$(MODULES_DIR)kalloc.o\
-	$(MODULES_DIR)kbd.o\
-	$(MODULES_DIR)lapic.o\
-	$(MODULES_DIR)log.o\
-	$(MODULES_DIR)main.o\
-	$(MODULES_DIR)mp.o\
-	$(MODULES_DIR)picirq.o\
-	$(MODULES_DIR)pipe.o\
-	$(MODULES_DIR)proc.o\
-	$(MODULES_DIR)sleeplock.o\
-	$(MODULES_DIR)spinlock.o\
-	$(MODULES_DIR)string.o\
-	$(MODULES_DIR)swtch.o\
-	$(MODULES_DIR)syscall.o\
-	$(MODULES_DIR)sysfile.o\
-	$(MODULES_DIR)sysproc.o\
-	$(MODULES_DIR)trapasm.o\
-	$(MODULES_DIR)trap.o\
-	$(MODULES_DIR)uart.o\
-	$(MODULES_DIR)vectors.o\
-	$(MODULES_DIR)vm.o\
+	$(BUILD_DIR)bio.o\
+	$(BUILD_DIR)console.o\
+	$(BUILD_DIR)exec.o\
+	$(BUILD_DIR)file.o\
+	$(BUILD_DIR)fs.o\
+	$(BUILD_DIR)ide.o\
+	$(BUILD_DIR)ioapic.o\
+	$(BUILD_DIR)kalloc.o\
+	$(BUILD_DIR)kbd.o\
+	$(BUILD_DIR)lapic.o\
+	$(BUILD_DIR)log.o\
+	$(BUILD_DIR)main.o\
+	$(BUILD_DIR)mp.o\
+	$(BUILD_DIR)picirq.o\
+	$(BUILD_DIR)pipe.o\
+	$(BUILD_DIR)proc.o\
+	$(BUILD_DIR)sleeplock.o\
+	$(BUILD_DIR)spinlock.o\
+	$(BUILD_DIR)string.o\
+	$(BUILD_DIR)swtch.o\
+	$(BUILD_DIR)syscall.o\
+	$(BUILD_DIR)sysfile.o\
+	$(BUILD_DIR)sysproc.o\
+	$(BUILD_DIR)trapasm.o\
+	$(BUILD_DIR)trap.o\
+	$(BUILD_DIR)uart.o\
+	$(BUILD_DIR)vectors.o\
+	$(BUILD_DIR)vm.o\
 
+$(BUILD_DIR)entryother: $(CORE_DIR)entryother.S
+	mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c -o $(BUILD_DIR)entryother.o $(CORE_DIR)entryother.S
+	$(LD) $(LDFLAGS) -N -e start -Ttext 0x7000 -o $(BUILD_DIR)bootblockother.o $(BUILD_DIR)entryother.o
+	$(OBJCOPY) -S -O binary -j .text $(BUILD_DIR)bootblockother.o $(BUILD_DIR)entryother
+	$(OBJDUMP) -S $(BUILD_DIR)bootblockother.o > $(BUILD_DIR)entryother.asm
+#maybe objdump unnecessary
 
-entryother: $(CORE_DIR)entryother.S
-	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c $(CORE_DIR)entryother.S
-	$(LD) $(LDFLAGS) -N -e start -Ttext 0x7000 -o bootblockother.o entryother.o
-	$(OBJCOPY) -S -O binary -j .text bootblockother.o entryother
-	$(OBJDUMP) -S bootblockother.o > entryother.asm
+$(BUILD_DIR)initcode: $(CORE_DIR)initcode.S
+	mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -nostdinc -I. -c -o $(BUILD_DIR)initcode.o $(CORE_DIR)initcode.S
+	$(LD) $(LDFLAGS) -N -e start -Ttext 0 -o $(BUILD_DIR)initcode.out $(BUILD_DIR)initcode.o
+	$(OBJCOPY) -S -O binary $(BUILD_DIR)initcode.out $(BUILD_DIR)initcode
+	$(OBJDUMP) -S $(BUILD_DIR)initcode.o > $(BUILD_DIR)initcode.asm
+#maybe objdump unnecessary
 
-initcode: $(CORE_DIR)initcode.S
-	$(CC) $(CFLAGS) -nostdinc -I. -c $(CORE_DIR)initcode.S
-	$(LD) $(LDFLAGS) -N -e start -Ttext 0 -o initcode.out initcode.o
-	$(OBJCOPY) -S -O binary initcode.out initcode
-	$(OBJDUMP) -S initcode.o > initcode.asm
+kernel: $(OBJS) $(MODULES_DIR)entry.o $(BUILD_DIR)entryother $(BUILD_DIR)initcode $(CORE_DIR)kernel.ld
+	mkdir -p $(BUILD_DIR)
+	$(LD) $(LDFLAGS) -T $(CORE_DIR)kernel.ld -o $(BUILD_DIR)kernel $(MODULES_DIR)entry.o $(OBJS) -b binary $(BUILD_DIR)initcode $(BUILD_DIR)entryother
+	$(OBJDUMP) -S $(BUILD_DIR)kernel > $(BUILD_DIR)kernel.asm
+	$(OBJDUMP) -t $(BUILD_DIR)kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $(BUILD_DIR)kernel.sym
+#maybe objdump unnecessary
 
-kernel: $(OBJS) $(MODULES_DIR)entry.o entryother initcode $(CORE_DIR)kernel.ld
-	$(LD) $(LDFLAGS) -T $(CORE_DIR)kernel.ld -o kernel $(MODULES_DIR)entry.o $(OBJS) -b binary initcode entryother
-	$(OBJDUMP) -S kernel > $(CORE_DIR)kernel.asm
-	$(OBJDUMP) -t kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > kernel.sym
 
 xv6.img: bootblock kernel
 	dd if=/dev/zero of=xv6.img count=10000
@@ -125,10 +140,13 @@ fs.img: mkfs README $(UPROGS)
 qemu-nox: fs.img xv6.img
 	$(QEMU) -nographic -drive file=fs.img,index=1,media=disk,format=raw -drive file=xv6.img,index=0,media=disk,format=raw -smp 2 -m 512
 
+# -include *.d
+
 clean: 
 	find ./ -name "*.o" -exec rm -f {} +
 	find ./ -name "*.d" -exec rm -f {} +
 	find ./ -name "*.asm" -exec rm -f {} +
 	find ./ -name "*.sym" -exec rm -f {} +
 	find ./ -name "_*" -exec rm -f {} +
+	rm -rf $(BUILD_DIR)
 	rm -f vectors.S bootblock entryother initcode initcode.out kernel xv6.img fs.img mkfs
