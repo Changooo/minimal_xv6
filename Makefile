@@ -35,18 +35,27 @@ bootblock: $(BOOTBLOCK_DIR)bootasm.S $(BOOTBLOCK_DIR)bootmain.c
 	$(OBJCOPY) -S -O binary -j .text $(BUILD_DIR)bootblock.o $(BUILD_DIR)bootblock
 	./$(BOOTBLOCK_DIR)sign.pl $(BUILD_DIR)bootblock
 
+# entry.o: $(MODULES_DIR)entry.S
+# 	$(CC) -m32 -gdwarf-2 -Wa,-divide -c -o $@ $<
+
 $(BUILD_DIR)vectors.S: $(MODULES_DIR)vectors.pl
-	mkdir -p $(BUILD_DIR)
 	./$(MODULES_DIR)vectors.pl > $(BUILD_DIR)vectors.S
+# $(MODULES_DIR)vectors.S: $(MODULES_DIR)vectors.pl
+# 	./$(MODULES_DIR)vectors.pl > $(MODULES_DIR)vectors.S
+# vectors.S: vectors.pl
+# 	./vectors.pl > vectors.S
 
 $(BUILD_DIR)%.o: $(MODULES_DIR)%.c
-	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c -o $@ $<
+	$(CC) $(CFLAGS) -fno-pie -no-pie -c -o $@ $<
 
 $(BUILD_DIR)%.o: $(MODULES_DIR)%.S
-	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c -o $(BUILD_DIR)$@ $<
+	$(CC) -m32 -gdwarf-2 -Wa,-divide -c -o $@ $<
 
 $(BUILD_DIR)%.o: $(BUILD_DIR)vectors.S
-	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c -o $(BUILD_DIR)$@ $<
+	$(CC) -m32 -gdwarf-2 -Wa,-divide -c -o $@ $<
+# $(MODULES_DIR)vectors.o: $(MODULES_DIR)vectors.S
+# 	$(CC) -m32 -gdwarf-2 -Wa,-divide -c -o $@ $<
+
 
 OBJS = \
 	$(BUILD_DIR)bio.o\
@@ -78,29 +87,27 @@ OBJS = \
 	$(BUILD_DIR)vectors.o\
 	$(BUILD_DIR)vm.o\
 
-$(BUILD_DIR)entryother: $(CORE_DIR)entryother.S
-	mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c -o $(BUILD_DIR)entryother.o $(CORE_DIR)entryother.S
+entryother: $(CORE_DIR)entryother.S
+	$(CC) $(CFLAGS) -fno-pie -no-pie -fno-pic -nostdinc -I. -c -o $(BUILD_DIR)entryother.o $(CORE_DIR)entryother.S
 	$(LD) $(LDFLAGS) -N -e start -Ttext 0x7000 -o $(BUILD_DIR)bootblockother.o $(BUILD_DIR)entryother.o
 	$(OBJCOPY) -S -O binary -j .text $(BUILD_DIR)bootblockother.o $(BUILD_DIR)entryother
 	$(OBJDUMP) -S $(BUILD_DIR)bootblockother.o > $(BUILD_DIR)entryother.asm
 #maybe objdump unnecessary
 
-$(BUILD_DIR)initcode: $(CORE_DIR)initcode.S
-	mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -nostdinc -I. -c -o $(BUILD_DIR)initcode.o $(CORE_DIR)initcode.S
+initcode: $(CORE_DIR)initcode.S
+	$(CC) $(CFLAGS)  -fno-pie -no-pie -nostdinc -I. -c -o $(BUILD_DIR)initcode.o $(CORE_DIR)initcode.S
 	$(LD) $(LDFLAGS) -N -e start -Ttext 0 -o $(BUILD_DIR)initcode.out $(BUILD_DIR)initcode.o
 	$(OBJCOPY) -S -O binary $(BUILD_DIR)initcode.out $(BUILD_DIR)initcode
 	$(OBJDUMP) -S $(BUILD_DIR)initcode.o > $(BUILD_DIR)initcode.asm
 #maybe objdump unnecessary
 
-kernel: $(OBJS) $(MODULES_DIR)entry.o $(BUILD_DIR)entryother $(BUILD_DIR)initcode $(CORE_DIR)kernel.ld
-	mkdir -p $(BUILD_DIR)
-	$(LD) $(LDFLAGS) -T $(CORE_DIR)kernel.ld -o $(BUILD_DIR)kernel $(MODULES_DIR)entry.o $(OBJS) -b binary $(BUILD_DIR)initcode $(BUILD_DIR)entryother
-	$(OBJDUMP) -S $(BUILD_DIR)kernel > $(BUILD_DIR)kernel.asm
-	$(OBJDUMP) -t $(BUILD_DIR)kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $(BUILD_DIR)kernel.sym
+kernel: $(OBJS) $(BUILD_DIR)entry.o entryother initcode $(CORE_DIR)kernel.ld
+	$(LD) $(LDFLAGS) -T $(CORE_DIR)kernel.ld -o $(BUILD_DIR)kernel $(BUILD_DIR)entry.o $(OBJS) -b binary $(BUILD_DIR)initcode $(BUILD_DIR)entryother
 #maybe objdump unnecessary
-
+# kernel: $(OBJS) $(BUILD_DIR)entry.o $(BUILD_DIR)entryother $(BUILD_DIR)initcode $(CORE_DIR)kernel.ld
+# 	$(LD) $(LDFLAGS) -T $(CORE_DIR)kernel.ld -o $(BUILD_DIR)kernel $(BUILD_DIR)entry.o $(OBJS) -b binary $(BUILD_DIR)initcode $(BUILD_DIR)entryother
+# 	$(OBJDUMP) -S $(BUILD_DIR)kernel > $(BUILD_DIR)kernel.asm
+# 	$(OBJDUMP) -t $(BUILD_DIR)kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $(BUILD_DIR)kernel.sym
 
 xv6.img: bootblock kernel
 	dd if=/dev/zero of=xv6.img count=10000
@@ -149,4 +156,4 @@ clean:
 	find ./ -name "*.sym" -exec rm -f {} +
 	find ./ -name "_*" -exec rm -f {} +
 	rm -rf $(BUILD_DIR)
-	rm -f vectors.S bootblock entryother initcode initcode.out kernel xv6.img fs.img mkfs
+	rm -f vectors.S bootblock entryother initcode initcode.out kernel xv6.img fs.img 
